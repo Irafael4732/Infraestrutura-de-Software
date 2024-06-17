@@ -1,0 +1,67 @@
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+class ContaBancaria {
+    private double saldo;
+    private final Lock lock = new ReentrantLock();
+
+    public ContaBancaria(double saldoInicial) {
+        this.saldo = saldoInicial;
+    }
+
+    public void depositar(double valor) {
+        lock.lock();
+        try {
+            saldo += valor;
+            System.out.println("Depositado " + valor + " BRL. Novo saldo: " + saldo);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void sacar(double valor) {
+        lock.lock();
+        try {
+            if (saldo >= valor) {
+                saldo -= valor;
+                System.out.println("Sacado " + valor + " BRL. Novo saldo: " + saldo);
+            } else {
+                System.out.println("Saldo insuficiente. Não é possível sacar " + valor + " BRL.");
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public double getSaldo() {
+        return saldo;
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        ContaBancaria conta = new ContaBancaria(1000);
+
+        // Criar múltiplos clientes (threads) realizando operações de depósito e saque
+        Thread cliente1 = new Thread(() -> conta.depositar(200));
+        Thread cliente2 = new Thread(() -> conta.sacar(300));
+        Thread cliente3 = new Thread(() -> conta.sacar(150));
+
+        // Iniciar as threads
+        cliente1.start();
+        cliente2.start();
+        cliente3.start();
+
+        // Aguardar todas as threads terminarem
+        try {
+            cliente1.join();
+            cliente2.join();
+            cliente3.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Exibir o saldo final
+        System.out.println("Saldo final: " + conta.getSaldo() + " BRL");
+    }
+}
