@@ -1,0 +1,55 @@
+import java.util.concurrent.Semaphore;
+
+class Ponte {
+    private Semaphore semaforo = new Semaphore(1);
+
+    public void entrarPonte() throws InterruptedException {
+        semaforo.acquire();
+        // Lógica para entrar na ponte
+        System.out.println("Carro entrou na ponte.");
+    }
+
+    public void sairPonte() {
+        // Lógica para sair da ponte
+        System.out.println("Carro saiu da ponte.");
+        semaforo.release();
+    }
+}
+
+class Carro implements Runnable {
+    private Ponte ponte;
+
+    public Carro(Ponte ponte) {
+        this.ponte = ponte;
+    }
+
+    public void run() {
+        try {
+            ponte.entrarPonte();
+            // Atravessar a ponte
+            Thread.sleep(1000); // Simulação de tempo de travessia
+            ponte.sairPonte();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Ponte ponte = new Ponte();
+        Thread carro1 = new Thread(new Carro(ponte));
+        Thread carro2 = new Thread(new Carro(ponte));
+
+        carro1.start();
+        carro2.start();
+
+        // Aguardar todas as threads terminarem
+        try {
+            carro1.join();
+            carro2.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
