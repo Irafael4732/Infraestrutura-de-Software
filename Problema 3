@@ -1,0 +1,105 @@
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+// Classe que representa a barbearia
+class Barbearia {
+    private final int numCadeiras; // Número de cadeiras na sala de espera
+    private int clientesEsperando; // Contador de clientes esperando
+    private final Lock lock; // Bloqueio para garantir atomicidade
+    private final Condition cadeiraDisponivel; // Condição para cadeiras disponíveis
+    private final Condition clienteDisponivel; // Condição para clientes disponíveis
+
+    // Construtor da classe Barbearia
+    public Barbearia(int numCadeiras) {
+        this.numCadeiras = numCadeiras;
+        this.clientesEsperando = 0;
+        this.lock = new ReentrantLock(); // Inicializa o bloqueio
+        this.cadeiraDisponivel = lock.newCondition(); // Inicializa a condição de cadeiras disponíveis
+        this.clienteDisponivel = lock.newCondition(); // Inicializa a condição de clientes disponíveis
+    }
+
+    // Método que simula a entrada de um cliente na barbearia
+    public void clienteEntra() {
+        lock.lock(); // Adquire o bloqueio
+        try {
+            if (clientesEsperando < numCadeiras) {
+                clientesEsperando++;
+                System.out.println("Cliente se senta na sala de espera.");
+                clienteDisponivel.signal(); // Sinaliza que um cliente está disponível
+                try {
+                    cadeiraDisponivel.await(); // Espera até que o barbeiro esteja disponível
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            } else {
+                System.out.println("Sem cadeiras disponíveis. Cliente vai embora.");
+            }
+        } finally {
+            lock.unlock(); // Libera o bloqueio
+        }
+    }
+
+    // Método que simula o trabalho do barbeiro
+    public void barbeiroTrabalha() {
+        while (true) {
+            lock.lock(); // Adquire o bloqueio
+            try {
+                while (clientesEsperando == 0) {
+                    try {
+                        clienteDisponivel.await(); // Espera até que um cliente esteja disponível
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                clientesEsperando--;
+                System.out.println("Barbeiro está cortando cabelo.");
+                cadeiraDisponivel.signal(); // Sinaliza que uma cadeira está disponível
+            } finally {
+                lock.unlock(); // Libera o bloqueio
+            }
+            try {
+                Thread.sleep(5000); // Simula o tempo para cortar o cabelo
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            System.out.println("Barbeiro terminou de cortar o cabelo.");
+        }
+    }
+}
+
+// Classe que representa um cliente
+class Cliente implements Runnable {
+    private final Barbearia barbearia;
+
+    public Cliente(Barbearia barbearia) {
+        this.barbearia = barbearia;
+    }
+
+    @Override
+    public void run() {
+        barbearia.clienteEntra();
+    }
+}
+
+// Classe principal que executa o problema do barbeiro da cidade
+public class ProblemaBarbeiroDaCidade {
+    public static void main(String[] args) {
+        final int numCadeiras = 5; // Número de cadeiras na sala de espera
+        Barbearia barbearia = new Barbearia(numCadeiras);
+
+        // Cria e inicia a thread do barbeiro
+        Thread threadBarbeiro = new Thread(barbearia::barbeiroTrabalha);
+        threadBarbeiro.start();
+
+        // Cria e inicia várias threads de clientes
+        for (int i = 0; i < 10; i++) {
+            new Thread(new Cliente(barbearia)).start();
+            try {
+                Thread.sleep(1000); // Simula o tempo entre a chegada de clientes
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}
