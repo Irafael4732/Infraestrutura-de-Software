@@ -1,0 +1,133 @@
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+// Classe que representa o restaurante
+class Restaurante {
+    private final int numLugares; // Número de lugares no restaurante
+    private int clientesSentados; // Contador de clientes sentados
+    private final Queue<Cliente> filaDeEspera; // Fila de espera para os clientes
+    private final Lock lock; // Bloqueio para garantir atomicidade
+    private final Semaphore assentosDisponiveis; // Semáforo para lugares disponíveis
+    private final Semaphore jantarConcluido; // Semáforo para indicar conclusão do jantar
+
+    // Construtor da classe Restaurante
+    public Restaurante(int numLugares) {
+        this.numLugares = numLugares;
+        this.clientesSentados = 0;
+        this.filaDeEspera = new LinkedList<>();
+        this.lock = new ReentrantLock(); // Inicializa o bloqueio
+        this.assentosDisponiveis = new Semaphore(numLugares); // Inicializa o semáforo de lugares disponíveis
+        this.jantarConcluido = new Semaphore(0); // Inicializa o semáforo de conclusão de jantar
+    }
+
+    // Método que simula a chegada de um cliente ao restaurante
+    public void clienteChega(Cliente cliente) throws InterruptedException {
+        lock.lock(); // Adquire o bloqueio
+        try {
+            if (clientesSentados < numLugares) {
+                clientesSentados++;
+                assentosDisponiveis.acquire(); // Adquire um lugar disponível
+                System.out.println("Cliente " + cliente.getId() + " se senta no restaurante.");
+            } else {
+                System.out.println("Cliente " + cliente.getId() + " espera na fila.");
+                filaDeEspera.add(cliente); // Adiciona o cliente à fila de espera
+            }
+        } finally {
+            lock.unlock(); // Libera o bloqueio
+        }
+    }
+
+    // Método que simula o cliente jantando
+    public void jantar(Cliente cliente) throws InterruptedException {
+        System.out.println("Cliente " + cliente.getId() + " está jantando.");
+        Thread.sleep(5000); // Simula o tempo de jantar
+        System.out.println("Cliente " + cliente.getId() + " terminou de jantar.");
+        lock.lock(); // Adquire o bloqueio
+        try {
+            clientesSentados--;
+            assentosDisponiveis.release(); // Libera um lugar disponível
+            if (clientesSentados == 0 && !filaDeEspera.isEmpty()) {
+                jantarConcluido.release(); // Libera o semáforo de conclusão de jantar
+            }
+        } finally {
+            lock.unlock(); // Libera o bloqueio
+        }
+    }
+
+    // Método que simula o gerenciamento do restaurante
+    public void gerenciarRestaurante() throws InterruptedException {
+        while (true) {
+            jantarConcluido.acquire(); // Aguarda a conclusão do jantar de todos os clientes
+            while (!filaDeEspera.isEmpty() && clientesSentados < numLugares) {
+                Cliente cliente = filaDeEspera.poll(); // Remove o cliente da fila de espera
+                clientesSentados++;
+                assentosDisponiveis.acquire(); // Adquire um lugar disponível
+                System.out.println("Cliente " + cliente.getId() + " se senta no restaurante.");
+                new Thread(() -> {
+                    try {
+                        jantar(cliente);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }).start();
+            }
+        }
+    }
+}
+
+// Classe que representa um cliente
+class Cliente implements Runnable {
+    private static int contador = 0; // Contador estático para gerar IDs únicos para os clientes
+    private final int id;
+    private final Restaurante restaurante;
+
+    public Cliente(Restaurante restaurante) {
+        this.id = ++contador;
+        this.restaurante = restaurante;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    @Override
+    public void run() {
+        try {
+            restaurante.clienteChega(this);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+
+// Classe principal que executa o problema do restaurante
+public class ProblemaRestaurante {
+    public static void main(String[] args) {
+        final int numLugares = 5; // Número de lugares no restaurante
+        Restaurante restaurante = new Restaurante(numLugares);
+
+        // Cria e inicia a thread para gerenciar o restaurante
+        Thread threadGerente = new Thread(() -> {
+            try {
+                restaurante.gerenciarRestaurante();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        threadGerente.start();
+
+        // Cria e inicia várias threads de clientes
+        for (int i = 0; i < 10; i++) {
+            new Thread(new Cliente(restaurante)).start();
+            try {
+                Thread.sleep(1000); // Simula o tempo entre a chegada de clientes
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}
